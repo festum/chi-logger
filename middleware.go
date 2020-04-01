@@ -5,16 +5,15 @@ import (
 	"net/http"
 	"time"
 
-	"go.uber.org/zap/zapcore"
-
-	"github.com/sirupsen/logrus"
-
 	"github.com/go-chi/chi/middleware"
+	"github.com/sirupsen/logrus"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 type chilogger struct {
 	logZ *zap.Logger
+	logS *zap.SugaredLogger
 	logL *logrus.Logger
 	name string
 }
@@ -35,6 +34,14 @@ func NewZapMiddleware(name string, logger *zap.Logger) func(next http.Handler) h
 	}.middleware
 }
 
+// NewZapSugaredMiddleware returns a new ZapSugaredLogger Middleware handler.
+func NewZapSugaredMiddleware(name string, logger *zap.SugaredLogger) func(next http.Handler) http.Handler {
+	return chilogger{
+		logS: logger,
+		name: name,
+	}.middleware
+}
+
 func (c chilogger) middleware(next http.Handler) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -47,7 +54,8 @@ func (c chilogger) middleware(next http.Handler) http.Handler {
 
 		latency := time.Since(start)
 
-		if c.logZ != nil {
+		switch {
+		case c.logZ != nil:
 			fields := []zapcore.Field{
 				zap.Int("status", ww.Status()),
 				zap.Duration("took", latency),
@@ -60,8 +68,20 @@ func (c chilogger) middleware(next http.Handler) http.Handler {
 				fields = append(fields, zap.String("request-id", requestID))
 			}
 			c.logZ.Info("request completed", fields...)
-		}
-		if c.logL != nil {
+		case c.logS != nil:
+			fields := []interface{}{
+				zap.Int("status", ww.Status()),
+				zap.Duration("took", latency),
+				zap.Int64(fmt.Sprintf("measure#%s.latency", c.name), latency.Nanoseconds()),
+				zap.String("remote", r.RemoteAddr),
+				zap.String("request", r.RequestURI),
+				zap.String("method", r.Method),
+			}
+			if requestID != "" {
+				fields = append(fields, zap.String("request-id", requestID))
+			}
+			c.logS.Infow("request completed", fields...)
+		case c.logL != nil:
 			fields := logrus.Fields{
 				"status": ww.Status(),
 				"took":   latency,

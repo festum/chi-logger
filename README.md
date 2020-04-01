@@ -11,7 +11,7 @@ Usage with Logrus
 ---
 
     logger := logrus.New()
-    
+
     r := chi.NewRouter()
     r.Use(middleware.RequestID)
     r.Use(middleware.RealIP)
@@ -27,4 +27,22 @@ Usage with Zap
     r.Use(middleware.RequestID)
     r.Use(middleware.RealIP)
     r.Use(chilogger.NewZapMiddleware("router", logger))
+    ...
+
+Usage with Zap Sugared
+---
+
+    loggingLevel := zap.NewAtomicLevel()
+    if isDev {
+        loggingLevel.SetLevel(zap.DebugLevel)
+    }
+    logger := zap.New(zapcore.NewCore(
+        zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+        zapcore.Lock(os.Stdout),
+        loggingLevel,
+    )).Sugar()
+    r := chi.NewRouter()
+    r.Use(middleware.RequestID)
+    r.Use(middleware.RealIP)
+    r.Use(chilogger.NewZapSugaredMiddleware("router", logger))
     ...
